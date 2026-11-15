@@ -457,6 +457,149 @@ if selected_sensors:
             "for the selected sensors."
         )
 
+    # ==============================================
+    # 11. SECTION 6.4 - MODEL COMPARISON
+    # ==============================================
+
+    # Add a divider between dashboard sections
+    st.divider()
+
+    # Display the model comparison heading
+    st.header("Machine Learning Model Comparison")
+
+    # Explain the purpose of the comparison
+    st.write(
+        "Compare the performance of four regression "
+        "models used to predict reference NO₂ measurements."
+    )
+
+    # ==============================================
+    # 11.1 LOAD MODEL EVALUATION RESULTS
+    # ==============================================
+
+    # Identify the CSV containing the model results
+    # This file is exported from Section 5 in Colab
+    results_path = DATA_FOLDER / "model_results.csv"
+
+    # Check whether the results file exists
+    if results_path.exists():
+
+        # Load the evaluation results using Pandas
+        results_df = pd.read_csv(results_path)
+
+        # ==============================================
+        # 11.2 DISPLAY MODEL RESULTS TABLE
+        # ==============================================
+
+        # Display the evaluation metrics for each model
+        st.subheader("Model Evaluation Results")
+
+        st.dataframe(
+            results_df,
+            use_container_width=True,
+            hide_index=True
+        )
+
+        # ==============================================
+        # 11.3 SELECT MODELS TO COMPARE
+        # ==============================================
+
+        # Allow users to select one or more models
+        # The options come from the results CSV
+        selected_models = st.multiselect(
+            "Select regression models to compare:",
+            options=results_df["Model"].tolist(),
+            default=results_df["Model"].tolist()
+        )
+
+        # Filter the table to selected models
+        filtered_results = results_df[
+            results_df["Model"].isin(selected_models)
+        ]
+
+        # ==============================================
+        # 11.4 SELECT EVALUATION METRIC
+        # ==============================================
+
+        # Allow users to choose which metric to plot
+        selected_metric = st.selectbox(
+            "Select evaluation metric:",
+            ["MAE", "RMSE", "R2"]
+        )
+
+        # ==============================================
+        # 11.5 CREATE MODEL COMPARISON GRAPH
+        # ==============================================
+
+        # Only create a graph if models are selected
+        if not filtered_results.empty:
+
+            # Create an interactive bar chart
+            fig_models = px.bar(
+                filtered_results,
+                x="Model",
+                y=selected_metric,
+                color="Model",
+                title="Regression Model Performance",
+                labels={
+                    "Model": "Regression Model",
+                    selected_metric: selected_metric
+                }
+            )
+
+            # Display the chart in Streamlit
+            st.plotly_chart(
+                fig_models,
+                use_container_width=True
+            )
+
+        else:
+            st.warning(
+                "Please select at least one model."
+            )
+
+        # ==============================================
+        # 11.6 IDENTIFY THE BEST PERFORMING MODEL
+        # ==============================================
+
+        # RMSE is used to identify the lowest error
+        # A lower RMSE indicates better prediction accuracy
+        # for the evaluation data used in Section 5
+
+        valid_results = results_df.dropna(
+            subset=["RMSE"]
+        )
+
+        if not valid_results.empty:
+
+            best_model = valid_results.loc[
+                valid_results["RMSE"].idxmin()
+            ]
+
+            # Display the model with the lowest RMSE
+            st.success(
+                "Lowest RMSE: "
+                + str(best_model["Model"])
+            )
+
+            # Display its RMSE value
+            st.write(
+                "RMSE:",
+                round(best_model["RMSE"], 4)
+            )
+
+        else:
+            st.info(
+                "Add the actual model evaluation "
+                "results from Section 5."
+            )
+
+    else:
+        st.warning(
+            "model_results.csv has not been uploaded "
+            "to the data folder yet."
+        )
+
 
 else:
 
