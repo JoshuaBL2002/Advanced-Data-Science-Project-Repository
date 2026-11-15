@@ -337,6 +337,56 @@ if selected_sensors:
     # Remove rows without a valid date
     graph_df = graph_df.dropna(subset=["date"])
 
+    
+    # ==============================================
+    # SECTION 6.5 - DATE RANGE FILTER
+    # ==============================================
+
+    # Display a heading for date filtering
+    st.subheader("Date Range Selection")
+
+    # Identify the earliest and latest dates
+    # available in the selected sensor datasets
+    min_date = graph_df["date"].min().date()
+    max_date = graph_df["date"].max().date()
+
+    # Allow users to select a start and end date
+    selected_dates = st.date_input(
+        "Select the date range:",
+        value=(min_date, max_date),
+        min_value=min_date,
+        max_value=max_date
+    )
+
+    # Check whether two valid dates were selected
+    if len(selected_dates) == 2:
+
+        start_date, end_date = selected_dates
+
+        # Keep measurements within the selected period
+        # Comparing dates includes the full final day
+        graph_df = graph_df[
+            graph_df["date"].dt.date.between(
+                start_date,
+                end_date
+            )
+        ].copy()
+
+        # Display the number of remaining observations
+        st.write(
+            "Observations in selected date range:",
+            len(graph_df)
+        )
+
+    else:
+        # Streamlit may temporarily return one date
+        # while the user is choosing a range
+        st.info("Please select a start and end date.")
+
+        # Prevent displaying unfiltered graph data
+        graph_df = graph_df.iloc[0:0].copy()
+
+
     # Convert NO2 measurement columns into numeric values
     # Invalid or missing measurements become NaN
     no2_columns = ["ASE_NO2", "SUD3_NO2", "QDP_NO2"]
