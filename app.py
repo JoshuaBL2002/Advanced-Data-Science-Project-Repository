@@ -107,6 +107,25 @@ else:
 
 st.write("Selected monitoring station:", selected_station)
 
+
+# Display the reference measurements
+st.subheader("Reference NO₂ Measurements")
+
+if selected_station == "Both":
+    st.dataframe(
+        combined_df[
+            ["Sensor", "date", "SUD3_NO2", "QDP_NO2"]
+        ],
+        use_container_width=True
+    )
+else:
+    st.dataframe(
+        combined_df[
+            ["Sensor", "date", "Reference_NO2"]
+        ],
+        use_container_width=True
+    )
+
     
     st.subheader("Selected Sensor Data")
 
