@@ -136,22 +136,22 @@ else:
         ],
         use_container_width=True
     )
-
     
-    st.subheader("Selected Sensor Data")
+if selected_sensors:
 
-    # Display the combined dataset
-    st.dataframe(
-        combined_df,
-        use_container_width=True
-    )
+    # Load the CSV files
 
-    # Display total observations
-    st.write(
-        "Total observations:",
-        len(combined_df)
-    )
+    # Combine datasets
 
+    # Monitoring station selection
+
+    # Display sensor data
+
+    # Display reference measurements
+
+else:
+    st.warning("Please select at least one ASE sensor.")
+    
 else:
     st.warning("Please select at least one ASE sensor.")
 
