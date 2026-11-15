@@ -18,6 +18,9 @@ import pandas as pd
 # Path is used to locate files and folders in the GitHub repository
 from pathlib import Path
 
+# Plotly Express creates interactive graphs
+import plotly.express as px
+
 
 # ==============================================
 # 2. CONFIGURE THE STREAMLIT DASHBOARD
@@ -303,7 +306,6 @@ if selected_sensors:
             use_container_width=True
         )
 
-
 # ==============================================
 # 9. HANDLE NO SENSOR SELECTION
 # ==============================================
@@ -311,6 +313,150 @@ if selected_sensors:
 # This else belongs to the original if selected_sensors statement
 # It runs only when the user has not selected any ASE sensors
 # Display a warning instead of attempting to load empty datasets
+
+
+    # ==============================================
+    # 10. SECTION 6.3 - INTERACTIVE NO2 GRAPHS
+    # ==============================================
+
+    # Display a divider between dashboard sections
+    st.divider()
+
+    # Create a heading for the visualisation section
+    st.header("Interactive NO₂ Concentration Graphs")
+
+    # Convert the date column into datetime values
+    # Invalid dates are converted into missing values
+    graph_df = combined_df.copy()
+
+    graph_df["date"] = pd.to_datetime(
+        graph_df["date"],
+        errors="coerce"
+    )
+
+    # Remove rows without a valid date
+    graph_df = graph_df.dropna(subset=["date"])
+
+    # Convert NO2 measurement columns into numeric values
+    # Invalid or missing measurements become NaN
+    no2_columns = ["ASE_NO2", "SUD3_NO2", "QDP_NO2"]
+
+    for column in no2_columns:
+        graph_df[column] = pd.to_numeric(
+            graph_df[column],
+            errors="coerce"
+        )
+
+    # ==============================================
+    # 10.1 SELECT WHICH MEASUREMENTS TO DISPLAY
+    # ==============================================
+
+    # Allow users to show or hide the reference stations
+    show_reference = st.checkbox(
+        "Show reference station measurements",
+        value=True
+    )
+
+    # ==============================================
+    # 10.2 CREATE THE SENSOR COMPARISON GRAPH
+    # ==============================================
+
+    # Start with the ASE sensor measurements
+    # Each selected sensor will have its own line
+    sensor_graph = graph_df[
+        ["date", "Sensor", "ASE_NO2"]
+    ].copy()
+
+    # Rename the measurement column for plotting
+    sensor_graph = sensor_graph.rename(
+        columns={"ASE_NO2": "NO2_Value"}
+    )
+
+    # Remove rows without a valid NO2 measurement
+    sensor_graph = sensor_graph.dropna(
+        subset=["NO2_Value"]
+    )
+
+    # ==============================================
+    # 10.3 ADD REFERENCE STATION MEASUREMENTS
+    # ==============================================
+
+    # Create a list containing the sensor graph data
+    graph_parts = [sensor_graph]
+
+    if show_reference:
+
+        # Select the reference stations to display
+        if selected_station == "Both":
+            reference_columns = ["SUD3_NO2", "QDP_NO2"]
+        else:
+            reference_columns = [selected_station + "_NO2"]
+
+        # Add each reference station as a separate line
+        for column in reference_columns:
+
+            # Use one selected sensor's rows for the
+            # reference series to avoid duplicating
+            # reference values across selected sensors
+            reference_df = graph_df[
+                graph_df["Sensor"] == selected_sensors[0]
+            ][["date", column]].copy()
+
+            # Give the reference series a clear label
+            reference_df["Sensor"] = column.replace(
+                "_NO2", " Reference"
+            )
+
+            # Rename the measurement column
+            reference_df = reference_df.rename(
+                columns={column: "NO2_Value"}
+            )
+
+            # Remove missing reference measurements
+            reference_df = reference_df.dropna(
+                subset=["NO2_Value"]
+            )
+
+            graph_parts.append(reference_df)
+
+    # Combine sensor and reference measurements
+    plot_df = pd.concat(
+        graph_parts,
+        ignore_index=True
+    )
+
+    # ==============================================
+    # 10.4 DISPLAY THE INTERACTIVE LINE GRAPH
+    # ==============================================
+
+    if not plot_df.empty:
+
+        # Create a line graph using Plotly Express
+        fig = px.line(
+            plot_df.sort_values("date"),
+            x="date",
+            y="NO2_Value",
+            color="Sensor",
+            title="NO₂ Concentrations Over Time",
+            labels={
+                "date": "Date and Time",
+                "NO2_Value": "NO₂ Measurement",
+                "Sensor": "Sensor / Reference Station"
+            }
+        )
+
+        # Display the graph in Streamlit
+        st.plotly_chart(
+            fig,
+            use_container_width=True
+        )
+
+    else:
+        st.warning(
+            "No valid NO₂ measurements are available "
+            "for the selected sensors."
+        )
+
 
 else:
 
