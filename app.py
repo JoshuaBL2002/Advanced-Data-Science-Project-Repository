@@ -1,767 +1,302 @@
+"""Advanced Data Science: interactive ASE sensor and reference NO₂ dashboard.
 
-# ==============================================
-# SECTION 6 - STREAMLIT DASHBOARD
-# Advanced Data Science - NO2 Prediction Project
-# ==============================================
+Expected repository structure:
+    app.py
+    requirements.txt
+    data/ASE4.csv ... data/ASE13.csv
+    data/model_results.csv  (exported from Colab Section 5.3)
+"""
 
-
-# ==============================================
-# 1. IMPORT REQUIRED LIBRARIES
-# ==============================================
-
-# Streamlit is used to create the interactive web dashboard
-import streamlit as st
-
-# Pandas is used to read, combine and display CSV datasets
-import pandas as pd
-
-# Path is used to locate files and folders in the GitHub repository
 from pathlib import Path
 
-# Plotly Express creates interactive graphs
+import pandas as pd
 import plotly.express as px
+import streamlit as st
 
-
-# ==============================================
-# 2. CONFIGURE THE STREAMLIT DASHBOARD
-# ==============================================
-
-# Configure the browser tab and dashboard layout
-# page_title sets the name displayed in the browser tab
-# page_icon sets the icon displayed beside the page title
-# layout="wide" allows the dashboard to use more screen space
-
-st.set_page_config(
-    page_title="NO2 Prediction Dashboard",
-    page_icon="🌍",
-    layout="wide"
-)
-
-
-# ==============================================
-# 3. DASHBOARD TITLE AND INTRODUCTION
-# ==============================================
-
-# Display the main heading at the top of the dashboard
+# ============================================================
+# SECTION 6.6 - PAGE SETTINGS AND NAVIGATION
+# ============================================================
+st.set_page_config(page_title="NO₂ Prediction Dashboard", page_icon="🌍", layout="wide")
 st.title("Air Quality NO₂ Prediction Dashboard")
+st.caption("Advanced Data Science Project | ASE Sensor Analysis and Machine Learning")
 
-# Display a short description underneath the main heading
-st.write(
-    "Advanced Data Science Project – "
-    "ASE Sensor Analysis and Machine Learning"
-)
-
-# Add a horizontal divider to separate sections
-st.divider()
-
-# ==============================================
-# SECTION 6.6 - DASHBOARD SIDEBAR
-# ==============================================
-
-# Create a sidebar on the left of the dashboard
-st.sidebar.title("Dashboard Filters")
-
-# Add a short description
-st.sidebar.write(
-    "Select sensors and monitoring stations "
-    "to explore the NO₂ measurements."
-)
-
-# ==============================================
-# 4. PROJECT OVERVIEW
-# ==============================================
-
-# Create a heading for the project introduction
-st.header("Project Overview")
-
-# Explain the purpose of the dashboard
-# The project investigates NO2 concentrations using
-# measurements collected by ASE air quality sensors
-# and reference measurements from monitoring stations
-
-st.write(
-    "This dashboard explores NO₂ concentrations "
-    "recorded by ASE sensors at the SUD3 and QDP "
-    "monitoring stations."
-)
-
-
-# ==============================================
-# 5. SECTION 6.1 - ASE SENSOR DATA EXPLORER
-# ==============================================
-
-# Add a divider before the sensor exploration section
-st.divider()
-
-# Display the heading for the data explorer
-st.header("ASE Sensor Data Explorer")
-
-
-# ==============================================
-# 5.1 LOCATE THE SENSOR DATASETS
-# ==============================================
-
-# Identify the folder containing the nine CSV datasets
-# __file__ represents the location of the current app.py file
-# .parent selects the folder containing app.py
-# / "data" points to the data folder in the GitHub repository
-
-DATA_FOLDER = Path(__file__).parent / "data"
-
-
-# ==============================================
-# 5.2 DEFINE THE AVAILABLE ASE SENSORS
-# ==============================================
-
-# Create a dictionary containing the available sensors
-# Each sensor name is linked to its corresponding CSV file
-# These are the nine datasets used in the project
-
-sensor_files = {
-    "ASE4": "ASE4.csv",
-    "ASE5": "ASE5.csv",
-    "ASE6": "ASE6.csv",
-    "ASE7": "ASE7.csv",
-    "ASE8": "ASE8.csv",
-    "ASE10": "ASE10.csv",
-    "ASE11": "ASE11.csv",
-    "ASE12": "ASE12.csv",
-    "ASE13": "ASE13.csv"
+DATA_FOLDER = Path(__file__).resolve().parent / "data"
+SENSOR_FILES = {
+    "ASE4": "ASE4.csv", "ASE5": "ASE5.csv", "ASE6": "ASE6.csv",
+    "ASE7": "ASE7.csv", "ASE8": "ASE8.csv", "ASE10": "ASE10.csv",
+    "ASE11": "ASE11.csv", "ASE12": "ASE12.csv", "ASE13": "ASE13.csv",
 }
+REFERENCE_COLUMNS = {"SUD3": "SUD3_NO2", "QDP": "QDP_NO2"}
 
 
-# ==============================================
-# 5.3 ALLOW USERS TO SELECT MULTIPLE SENSORS
-# ==============================================
+# Cache CSV reading so changing a filter does not repeatedly reload the same files.
+@st.cache_data(show_spinner=False)
+def load_sensor_file(file_path: str, sensor_name: str) -> pd.DataFrame:
+    # The original datasets use semicolon delimiters and 'NA' for missing values.
+    frame = pd.read_csv(file_path, sep=";", na_values=["NA"])
+    frame["Sensor"] = sensor_name
+    return frame
 
-# Create an interactive multiselect dropdown
-# Users can choose one or several ASE sensors
-# The available choices come from the sensor_files dictionary
-# ASE4 and ASE5 are selected automatically when the app opens
-# Allow users to select multiple ASE sensors
-# The dropdown will now appear in the sidebar
 
+@st.cache_data(show_spinner=False)
+def load_model_results(file_path: str) -> pd.DataFrame:
+    return pd.read_csv(file_path)
+
+
+# ============================================================
+# SECTION 6.1 - SIDEBAR SENSOR SELECTION AND DATA LOADING
+# ============================================================
+st.sidebar.title("Dashboard Filters")
+st.sidebar.write("Choose the ASE sensors, reference station and recording period.")
 selected_sensors = st.sidebar.multiselect(
-    "Select ASE sensors to compare:",
-    options=list(sensor_files.keys()),
-    default=["ASE4", "ASE5"]
+    "ASE sensors", options=list(SENSOR_FILES), default=["ASE4", "ASE5"]
+)
+selected_station = st.sidebar.selectbox("Reference monitoring station", ["Both", "SUD3", "QDP"])
+
+if not selected_sensors:
+    st.info("Select at least one ASE sensor in the sidebar to view the dashboard.")
+    st.stop()
+
+loaded_frames = []
+for sensor in selected_sensors:
+    path = DATA_FOLDER / SENSOR_FILES[sensor]
+    if not path.is_file():
+        st.error(f"Missing dataset: data/{path.name}. Upload this CSV to the repository's data folder.")
+        st.stop()
+    try:
+        loaded_frames.append(load_sensor_file(str(path), sensor))
+    except (OSError, ValueError, pd.errors.ParserError) as error:
+        st.error(f"Unable to read {path.name}: {error}")
+        st.stop()
+
+# Keep the raw combined dataset separate from derived columns used for charts.
+combined_df = pd.concat(loaded_frames, ignore_index=True)
+required_columns = {"date", "ASE_NO2", "SUD3_NO2", "QDP_NO2"}
+missing_columns = required_columns - set(combined_df.columns)
+if missing_columns:
+    st.error("Required columns are missing: " + ", ".join(sorted(missing_columns)))
+    st.stop()
+
+# The station selector chooses which reference measurements to display.
+# It does NOT filter observations by site: the raw CSV location mapping
+# would need to be verified before doing that.
+reference_cols = (
+    list(REFERENCE_COLUMNS.values()) if selected_station == "Both"
+    else [REFERENCE_COLUMNS[selected_station]]
 )
 
-# ==============================================
-# 5.4 LOAD THE SELECTED SENSOR DATASETS
-# ==============================================
+# ============================================================
+# SECTION 6.5 - DATE RANGE FILTER
+# ============================================================
+# Convert dates once and keep the original data for quality analysis.
+chart_df = combined_df.copy()
+chart_df["date"] = pd.to_datetime(chart_df["date"], errors="coerce")
+for col in ["ASE_NO2", *REFERENCE_COLUMNS.values()]:
+    chart_df[col] = pd.to_numeric(chart_df[col], errors="coerce")
 
-# Check whether the user has selected at least one sensor
-# If sensors are selected, their CSV datasets will be loaded
-# If no sensors are selected, a warning will be displayed
-
-if selected_sensors:
-
-    # Create an empty list to store the selected datasets
-    datasets = []
-
-    # Loop through each sensor selected by the user
-    for sensor in selected_sensors:
-
-        # Identify the CSV filename for the current sensor
-        # Combine the data folder path with the filename
-        file_path = DATA_FOLDER / sensor_files[sensor]
-
-        # Read the sensor CSV file using Pandas
-        # sep=";" specifies that columns are separated by semicolons
-        # na_values=["NA"] identifies missing measurements
-        # Missing values are converted to NaN by Pandas
-
-        df = pd.read_csv(
-            file_path,
-            sep=";",
-            na_values=["NA"]
-        )
-
-        # Create a new column called Sensor
-        # This identifies which ASE sensor each observation belongs to
-        # It is useful when comparing multiple datasets
-
-        df["Sensor"] = sensor
-
-        # Add the current sensor dataset to the datasets list
-        datasets.append(df)
-
-
-    # ==============================================
-    # 5.5 COMBINE THE SELECTED DATASETS
-    # ==============================================
-
-    # Combine all selected sensor datasets into one DataFrame
-    # pd.concat joins the datasets vertically (row by row)
-    # ignore_index=True creates a new continuous row index
-    # The Sensor column preserves each observation's source
-
-    combined_df = pd.concat(
-        datasets,
-        ignore_index=True
+valid_dates = chart_df["date"].dropna()
+if valid_dates.empty:
+    st.sidebar.warning("No valid dates found; time-series charts are unavailable.")
+    filtered_df = chart_df.iloc[0:0].copy()
+else:
+    earliest, latest = valid_dates.min().date(), valid_dates.max().date()
+    chosen_dates = st.sidebar.date_input(
+        "Recording period", value=(earliest, latest),
+        min_value=earliest, max_value=latest
     )
-
-
-    # ==============================================
-    # 6. SECTION 6.2 - MONITORING STATION SELECTION
-    # ==============================================
-
-    # Display the heading for monitoring station selection
-    st.subheader("Monitoring Station Selection")
-
-    # Create an interactive dropdown for the monitoring stations
-    # Both displays reference measurements from both stations
-    # SUD3 selects the SUD3 reference measurements
-    # QDP selects the QDP reference measurements
-    # Display monitoring station selection in the sidebar
-
-    selected_station = st.sidebar.selectbox(
-        "Select monitoring station:",
-        ["Both", "SUD3", "QDP"]
-    )
-
-
-    # ==============================================
-    # 6.1 SELECT THE REFERENCE NO2 MEASUREMENTS
-    # ==============================================
-
-    # The CSV datasets contain reference NO2 measurements
-    # from the SUD3 and QDP monitoring stations
-    #
-    # Reference_NO2 is a common column name that can
-    # represent the selected station's reference measurements
-    #
-    # This allows later graphs to use the same column name
-    # when switching between individual stations
-
-    # If SUD3 is selected, use the SUD3_NO2 column
-    if selected_station == "SUD3":
-
-        combined_df["Reference_NO2"] = combined_df["SUD3_NO2"]
-
-    # If QDP is selected, use the QDP_NO2 column
-    elif selected_station == "QDP":
-
-        combined_df["Reference_NO2"] = combined_df["QDP_NO2"]
-
-    # If Both is selected, retain both original reference columns
-    # Reference_NO2 is set to missing because there is no
-    # single reference value selected for each observation
+    if isinstance(chosen_dates, (tuple, list)) and len(chosen_dates) == 2:
+        start_date, end_date = chosen_dates
+        if start_date <= end_date:
+            filtered_df = chart_df.loc[
+                chart_df["date"].dt.date.between(start_date, end_date)
+            ].copy()
+        else:
+            st.sidebar.warning("Start date must be before the end date.")
+            filtered_df = chart_df.iloc[0:0].copy()
     else:
+        st.sidebar.info("Select both a start and end date.")
+        filtered_df = chart_df.iloc[0:0].copy()
 
-        combined_df["Reference_NO2"] = pd.NA
+# Tabs provide navigation without creating multiple Streamlit pages.
+overview_tab, graphs_tab, models_tab, quality_tab = st.tabs([
+    "Overview & Data", "Sensor Graphs", "Model Comparison", "Data Quality"
+])
 
+# ============================================================
+# SECTION 6.2 - OVERVIEW AND REFERENCE MEASUREMENTS
+# ============================================================
+with overview_tab:
+    st.header("Project Overview")
+    st.write(
+        "Explore raw ASE sensor signals and NO₂ reference measurements "
+        "from the SUD3 and QDP monitoring stations. Compare the regression "
+        "models developed in Google Colab."
+    )
+    a, b, c = st.columns(3)
+    a.metric("Selected sensors", len(selected_sensors))
+    b.metric("Total observations", f"{len(combined_df):,}")
+    c.metric("Observations in date range", f"{len(filtered_df):,}")
 
-    # ==============================================
-    # 7. DISPLAY THE SELECTED SENSOR DATA
-    # ==============================================
-
-    # Create a heading above the combined dataset
     st.subheader("Selected Sensor Data")
+    st.dataframe(combined_df, use_container_width=True)
 
-    # Display the combined DataFrame as an interactive table
-    # Users can scroll through the rows and columns
-    # use_container_width=True fills the available dashboard width
-
-    st.dataframe(
-        combined_df,
-        use_container_width=True
-    )
-
-
-    # ==============================================
-    # 7.1 DISPLAY THE NUMBER OF OBSERVATIONS
-    # ==============================================
-
-    # len(combined_df) counts the total number of rows
-    # This updates automatically when users select sensors
-    # Selecting more sensors generally increases the row count
-
-    st.write(
-        "Total observations:",
-        len(combined_df)
-    )
-
-
-    # ==============================================
-    # 8. DISPLAY REFERENCE NO2 MEASUREMENTS
-    # ==============================================
-
-    # Create a separate section for reference measurements
     st.subheader("Reference NO₂ Measurements")
+    st.caption("The station choice selects reference columns; it does not filter sensor rows by location.")
+    st.dataframe(
+        combined_df[["Sensor", "date", *reference_cols]],
+        use_container_width=True, hide_index=True
+    )
 
-    # If Both is selected, display reference measurements
-    # from SUD3 and QDP in separate columns
+# ============================================================
+# SECTION 6.3 - INTERACTIVE TIME-SERIES GRAPHS
+# ============================================================
+with graphs_tab:
+    st.header("Interactive Sensor and Reference Graphs")
+    st.caption(
+        "ASE_NO2 may represent an uncalibrated sensor signal rather than NO₂ "
+        "concentration. Compare its shape with reference measurements, not "
+        "its numerical magnitude, unless units and calibration are confirmed."
+    )
+    st.write(f"Observations in selected date range: **{len(filtered_df):,}**")
+    show_reference = st.checkbox("Show reference station measurements", value=True)
 
-    if selected_station == "Both":
-
-        # Show the sensor identifier, date and both
-        # reference NO2 measurement columns
-
-        st.dataframe(
-            combined_df[
-                ["Sensor", "date", "SUD3_NO2", "QDP_NO2"]
-            ],
-            use_container_width=True
-        )
-
-    # If an individual station is selected,
-    # display the common Reference_NO2 column
+    if filtered_df.empty:
+        st.warning("No valid dated measurements are available for this selection.")
     else:
-
-        # Show the sensor identifier, date and
-        # reference measurements for the selected station
-
-        st.dataframe(
-            combined_df[
-                ["Sensor", "date", "Reference_NO2"]
-            ],
-            use_container_width=True
-        )
-
-# ==============================================
-# 9. HANDLE NO SENSOR SELECTION
-# ==============================================
-
-# This else belongs to the original if selected_sensors statement
-# It runs only when the user has not selected any ASE sensors
-# Display a warning instead of attempting to load empty datasets
-
-
-    # ==============================================
-    # 10. SECTION 6.3 - INTERACTIVE NO2 GRAPHS
-    # ==============================================
-
-    # Display a divider between dashboard sections
-    st.divider()
-
-    # Create a heading for the visualisation section
-    st.header("Interactive NO₂ Concentration Graphs")
-
-    # Convert the date column into datetime values
-    # Invalid dates are converted into missing values
-    graph_df = combined_df.copy()
-
-    graph_df["date"] = pd.to_datetime(
-        graph_df["date"],
-        errors="coerce"
-    )
-
-    # Remove rows without a valid date
-    graph_df = graph_df.dropna(subset=["date"])
-
-    
-    # ==============================================
-    # SECTION 6.5 - DATE RANGE FILTER
-    # ==============================================
-
-    # Display a heading for date filtering
-    st.subheader("Date Range Selection")
-
-    # Identify the earliest and latest dates
-    # available in the selected sensor datasets
-    min_date = graph_df["date"].min().date()
-    max_date = graph_df["date"].max().date()
-
-    # Allow users to select a start and end date
-    selected_dates = st.sidebar.date_input(
-        "Select the date range:",
-        value=(min_date, max_date),
-        min_value=min_date,
-        max_value=max_date
-    )
-
-    # Check whether two valid dates were selected
-    if len(selected_dates) == 2:
-
-        start_date, end_date = selected_dates
-
-        # Keep measurements within the selected period
-        # Comparing dates includes the full final day
-        graph_df = graph_df[
-            graph_df["date"].dt.date.between(
-                start_date,
-                end_date
+        # Separate charts avoid implying that raw ASE and reference values
+        # necessarily share the same units or measurement scale.
+        ase_graph = filtered_df.dropna(subset=["ASE_NO2"])
+        if not ase_graph.empty:
+            fig_ase = px.line(
+                ase_graph.sort_values("date"), x="date", y="ASE_NO2",
+                color="Sensor", title="ASE NO₂ Sensor Signal Over Time",
+                labels={"date": "Date and Time", "ASE_NO2": "ASE_NO2 (raw value; units unverified)"}
             )
-        ].copy()
-
-        # Display the number of remaining observations
-        st.write(
-            "Observations in selected date range:",
-            len(graph_df)
-        )
-
-    else:
-        # Streamlit may temporarily return one date
-        # while the user is choosing a range
-        st.info("Please select a start and end date.")
-
-        # Prevent displaying unfiltered graph data
-        graph_df = graph_df.iloc[0:0].copy()
-
-
-    # Convert NO2 measurement columns into numeric values
-    # Invalid or missing measurements become NaN
-    no2_columns = ["ASE_NO2", "SUD3_NO2", "QDP_NO2"]
-
-    for column in no2_columns:
-        graph_df[column] = pd.to_numeric(
-            graph_df[column],
-            errors="coerce"
-        )
-
-    # ==============================================
-    # 10.1 SELECT WHICH MEASUREMENTS TO DISPLAY
-    # ==============================================
-
-    # Allow users to show or hide the reference stations
-    show_reference = st.checkbox(
-        "Show reference station measurements",
-        value=True
-    )
-
-    # ==============================================
-    # 10.2 CREATE THE SENSOR COMPARISON GRAPH
-    # ==============================================
-
-    # Start with the ASE sensor measurements
-    # Each selected sensor will have its own line
-    sensor_graph = graph_df[
-        ["date", "Sensor", "ASE_NO2"]
-    ].copy()
-
-    # Rename the measurement column for plotting
-    sensor_graph = sensor_graph.rename(
-        columns={"ASE_NO2": "NO2_Value"}
-    )
-
-    # Remove rows without a valid NO2 measurement
-    sensor_graph = sensor_graph.dropna(
-        subset=["NO2_Value"]
-    )
-
-    # ==============================================
-    # 10.3 ADD REFERENCE STATION MEASUREMENTS
-    # ==============================================
-
-    # Create a list containing the sensor graph data
-    graph_parts = [sensor_graph]
-
-    if show_reference:
-
-        # Select the reference stations to display
-        if selected_station == "Both":
-            reference_columns = ["SUD3_NO2", "QDP_NO2"]
+            st.plotly_chart(fig_ase, use_container_width=True)
         else:
-            reference_columns = [selected_station + "_NO2"]
+            st.info("No ASE_NO2 readings are available in the selected period.")
 
-        # Add each reference station as a separate line
-        for column in reference_columns:
+        if show_reference:
+            # Reference readings may be repeated in each sensor file.
+            # Remove exact date/value duplicates for each station, without
+            # assuming all sensors have the same timestamps.
+            ref_parts = []
+            for col in reference_cols:
+                ref = filtered_df[["date", col]].dropna().drop_duplicates().copy()
+                ref = ref.rename(columns={col: "Reference_NO2"})
+                ref["Station"] = col.replace("_NO2", "")
+                ref_parts.append(ref)
+            if ref_parts:
+                reference_plot = pd.concat(ref_parts, ignore_index=True)
+                if not reference_plot.empty:
+                    fig_ref = px.line(
+                        reference_plot.sort_values("date"), x="date", y="Reference_NO2",
+                        color="Station", title="Reference Station NO₂ Measurements",
+                        labels={"date": "Date and Time", "Reference_NO2": "Reference NO₂ (dataset units)"}
+                    )
+                    st.plotly_chart(fig_ref, use_container_width=True)
+                else:
+                    st.info("No reference NO₂ measurements are available in this period.")
 
-            # Use one selected sensor's rows for the
-            # reference series to avoid duplicating
-            # reference values across selected sensors
-            reference_df = graph_df[
-                graph_df["Sensor"] == selected_sensors[0]
-            ][["date", column]].copy()
-
-            # Give the reference series a clear label
-            reference_df["Sensor"] = column.replace(
-                "_NO2", " Reference"
-            )
-
-            # Rename the measurement column
-            reference_df = reference_df.rename(
-                columns={column: "NO2_Value"}
-            )
-
-            # Remove missing reference measurements
-            reference_df = reference_df.dropna(
-                subset=["NO2_Value"]
-            )
-
-            graph_parts.append(reference_df)
-
-    # Combine sensor and reference measurements
-    plot_df = pd.concat(
-        graph_parts,
-        ignore_index=True
-    )
-
-    # ==============================================
-    # 10.4 DISPLAY THE INTERACTIVE LINE GRAPH
-    # ==============================================
-
-    if not plot_df.empty:
-
-        # Create a line graph using Plotly Express
-        fig = px.line(
-            plot_df.sort_values("date"),
-            x="date",
-            y="NO2_Value",
-            color="Sensor",
-            title="NO₂ Concentrations Over Time",
-            labels={
-                "date": "Date and Time",
-                "NO2_Value": "NO₂ Measurement",
-                "Sensor": "Sensor / Reference Station"
-            }
-        )
-
-        # Display the graph in Streamlit
-        st.plotly_chart(
-            fig,
-            use_container_width=True
-        )
-
-    else:
-        st.warning(
-            "No valid NO₂ measurements are available "
-            "for the selected sensors."
-        )
-
-    # ==============================================
-    # 11. SECTION 6.4 - MODEL COMPARISON
-    # ==============================================
-
-    # Add a divider between dashboard sections
-    st.divider()
-
-    # Display the model comparison heading
+# ============================================================
+# SECTION 6.4 - MACHINE LEARNING MODEL COMPARISON
+# ============================================================
+with models_tab:
     st.header("Machine Learning Model Comparison")
-
-    # Explain the purpose of the comparison
-    st.write(
-        "Compare the performance of four regression "
-        "models used to predict reference NO₂ measurements."
-    )
-
-    # ==============================================
-    # 11.1 LOAD MODEL EVALUATION RESULTS
-    # ==============================================
-
-    # Identify the CSV containing the model results
-    # This file is exported from Section 5 in Colab
+    st.write("Results exported from the four regression models in Colab Section 5.3.")
     results_path = DATA_FOLDER / "model_results.csv"
-
-    # Check whether the results file exists
-    if results_path.exists():
-
-        # Load the evaluation results using Pandas
-        results_df = pd.read_csv(results_path)
-
-        # ==============================================
-        # 11.2 DISPLAY MODEL RESULTS TABLE
-        # ==============================================
-
-        # Display the evaluation metrics for each model
-        st.subheader("Model Evaluation Results")
-
-        st.dataframe(
-            results_df,
-            use_container_width=True,
-            hide_index=True
-        )
-
-        # ==============================================
-        # 11.3 SELECT MODELS TO COMPARE
-        # ==============================================
-
-        # Allow users to select one or more models
-        # The options come from the results CSV
-        selected_models = st.multiselect(
-            "Select regression models to compare:",
-            options=results_df["Model"].tolist(),
-            default=results_df["Model"].tolist()
-        )
-
-        # Filter the table to selected models
-        filtered_results = results_df[
-            results_df["Model"].isin(selected_models)
-        ]
-
-        # ==============================================
-        # 11.4 SELECT EVALUATION METRIC
-        # ==============================================
-
-        # Allow users to choose which metric to plot
-        selected_metric = st.selectbox(
-            "Select evaluation metric:",
-            ["MAE", "RMSE", "R2"]
-        )
-
-        # ==============================================
-        # 11.5 CREATE MODEL COMPARISON GRAPH
-        # ==============================================
-
-        # Only create a graph if models are selected
-        if not filtered_results.empty:
-
-            # Create an interactive bar chart
-            fig_models = px.bar(
-                filtered_results,
-                x="Model",
-                y=selected_metric,
-                color="Model",
-                title="Regression Model Performance",
-                labels={
-                    "Model": "Regression Model",
-                    selected_metric: selected_metric
-                }
-            )
-
-            # Display the chart in Streamlit
-            st.plotly_chart(
-                fig_models,
-                use_container_width=True
-            )
-
-        else:
-            st.warning(
-                "Please select at least one model."
-            )
-
-        # ==============================================
-        # 11.6 IDENTIFY THE BEST PERFORMING MODEL
-        # ==============================================
-
-        # RMSE is used to identify the lowest error
-        # A lower RMSE indicates better prediction accuracy
-        # for the evaluation data used in Section 5
-
-        valid_results = results_df.dropna(
-            subset=["RMSE"]
-        )
-
-        if not valid_results.empty:
-
-            best_model = valid_results.loc[
-                valid_results["RMSE"].idxmin()
-            ]
-
-            # Display the model with the lowest RMSE
-            st.success(
-                "Lowest RMSE: "
-                + str(best_model["Model"])
-            )
-
-            # Display its RMSE value
-            st.write(
-                "RMSE:",
-                round(best_model["RMSE"], 4)
-            )
-
-        else:
-            st.info(
-                "Add the actual model evaluation "
-                "results from Section 5."
-            )
-
+    if not results_path.is_file():
+        st.warning("Upload model_results.csv to the repository's data folder.")
     else:
-        st.warning(
-            "model_results.csv has not been uploaded "
-            "to the data folder yet."
-        )
+        try:
+            results_df = load_model_results(str(results_path))
+            expected = {"Model", "MAE", "RMSE", "R2"}
+            absent = expected - set(results_df.columns)
+            if absent:
+                st.error("Model results file is missing columns: " + ", ".join(sorted(absent)))
+            else:
+                for metric in ("MAE", "RMSE", "R2"):
+                    results_df[metric] = pd.to_numeric(results_df[metric], errors="coerce")
+                st.subheader("Model Evaluation Results")
+                st.dataframe(results_df, use_container_width=True, hide_index=True)
+                model_options = results_df["Model"].dropna().astype(str).tolist()
+                chosen_models = st.multiselect(
+                    "Regression models to compare", model_options, default=model_options
+                )
+                metric = st.selectbox("Evaluation metric", ["MAE", "RMSE", "R2"])
+                selected_results = results_df[results_df["Model"].isin(chosen_models)].dropna(subset=[metric])
+                if not selected_results.empty:
+                    fig_models = px.bar(
+                        selected_results, x="Model", y=metric, color="Model",
+                        title=f"Regression Model Performance: {metric}"
+                    )
+                    st.plotly_chart(fig_models, use_container_width=True)
+                else:
+                    st.info("Select models with valid results to display a comparison.")
+                valid_rmse = results_df.dropna(subset=["RMSE"])
+                if not valid_rmse.empty:
+                    best = valid_rmse.loc[valid_rmse["RMSE"].idxmin()]
+                    st.success(f"Lowest RMSE: {best['Model']} ({best['RMSE']:.4f})")
+                st.caption("Lower MAE and RMSE are better; higher R² is generally better.")
+        except (OSError, ValueError, pd.errors.ParserError) as error:
+            st.error(f"Unable to load model results: {error}")
 
-
-    # ==============================================
-    # SECTION 6.7 - DATA QUALITY AND STATISTICS
-    # ==============================================
-
-    # Display the section heading
+# ============================================================
+# SECTION 6.7 - DATA QUALITY AND DESCRIPTIVE STATISTICS
+# ============================================================
+with quality_tab:
     st.header("Data Quality and Statistics")
-
-    # ==============================================
-    # 1. DATASET OVERVIEW
-    # ==============================================
-
-    # Create three columns for summary statistics
-    col1, col2, col3 = st.columns(3)
-
-    # Display the total number of observations
-    with col1:
-        st.metric(
-            "Total Observations",
-            len(combined_df)
-        )
-
-    # Display the number of selected ASE sensors
-    with col2:
-        st.metric(
-            "Selected Sensors",
-            len(selected_sensors)
-        )
-
-    # Display the total number of missing values
-    with col3:
-        st.metric(
-            "Missing Values",
-            int(combined_df.isna().sum().sum())
-        )
-
-    # ==============================================
-    # 2. MISSING VALUE ANALYSIS
-    # ==============================================
+    st.write("These statistics use the original selected CSV rows, before date filtering.")
+    # Use only source columns and the sensor identifier. No artificial
+    # Reference_NO2 column is added, so it cannot inflate missing counts.
+    missing_counts = combined_df.isna().sum()
+    missing_pct = combined_df.isna().mean().mul(100)
+    total_missing = int(missing_counts.sum())
+    a, b, c = st.columns(3)
+    a.metric("Total observations", f"{len(combined_df):,}")
+    b.metric("Selected sensors", len(selected_sensors))
+    c.metric("Missing cells", f"{total_missing:,}")
 
     st.subheader("Missing Value Analysis")
-
-    # Count missing values in each dataset column
-    missing_values = combined_df.isna().sum()
-
-    # Calculate the percentage of missing values
-    missing_percent = (
-        combined_df.isna().mean() * 100
-    )
-
-    # Create a summary table
-    missing_df = pd.DataFrame({
+    missing_table = pd.DataFrame({
         "Column": combined_df.columns,
-        "Missing Values": missing_values.values,
-        "Missing (%)": missing_percent.values
+        "Missing Values": missing_counts.to_numpy(),
+        "Missing (%)": missing_pct.to_numpy()
     })
-
-    # Display the missing-value summary
-    st.dataframe(
-        missing_df,
-        use_container_width=True,
-        hide_index=True
-    )
-
-    # ==============================================
-    # 3. MISSING VALUE VISUALISATION
-    # ==============================================
-
-    # Create a bar chart showing missing percentages
+    st.dataframe(missing_table, use_container_width=True, hide_index=True)
     fig_missing = px.bar(
-        missing_df,
-        x="Column",
-        y="Missing (%)",
+        missing_table, x="Column", y="Missing (%)",
         title="Percentage of Missing Values by Column"
     )
-
-    # Display the interactive chart
-    st.plotly_chart(
-        fig_missing,
-        use_container_width=True
-    )
-
-    # ==============================================
-    # 4. DESCRIPTIVE STATISTICS
-    # ==============================================
+    st.plotly_chart(fig_missing, use_container_width=True)
 
     st.subheader("Descriptive Statistics")
+    # Some numeric columns can be read as text if they contain mixed entries.
+    # Describe columns that Pandas has identified as numeric in the raw CSVs.
+    numeric_data = combined_df.select_dtypes(include="number")
+    if numeric_data.empty:
+        st.info("No numeric columns were detected for descriptive statistics.")
+    else:
+        st.dataframe(numeric_data.describe(), use_container_width=True)
 
-    # Calculate summary statistics for numeric columns
-    statistics_df = combined_df.describe()
-
-    # Display the statistics table
-    st.dataframe(
-        statistics_df,
-        use_container_width=True
+    st.subheader("Missing Values by Sensor")
+    # Count missing cells per sensor without relying on newer Pandas options.
+    sensor_missing = combined_df.isna().sum(axis=1)
+    by_sensor = pd.DataFrame({
+        "Sensor": combined_df["Sensor"],
+        "Missing Cells": sensor_missing
+    }).groupby("Sensor", as_index=False).agg(
+        Observations=("Missing Cells", "size"),
+        **{"Missing Cells": ("Missing Cells", "sum")}
     )
+    st.dataframe(by_sensor, use_container_width=True, hide_index=True)
 
-
-else:
-
-    st.warning("Please select at least one ASE sensor.")
+# ============================================================
+# SECTION 6.8 - FINAL TESTING NOTES
+# ============================================================
+st.divider()
+st.caption(
+    "Validation: check all nine CSVs, sensor/station/date filters, chart labels, "
+    "missing-value counts and model_results.csv against the Colab notebook. "
+    "This dashboard displays saved model results; it does not retrain models."
+)
