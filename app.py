@@ -54,6 +54,18 @@ st.write(
 # Add a horizontal divider to separate sections
 st.divider()
 
+# ==============================================
+# SECTION 6.6 - DASHBOARD SIDEBAR
+# ==============================================
+
+# Create a sidebar on the left of the dashboard
+st.sidebar.title("Dashboard Filters")
+
+# Add a short description
+st.sidebar.write(
+    "Select sensors and monitoring stations "
+    "to explore the NO₂ measurements."
+)
 
 # ==============================================
 # 4. PROJECT OVERVIEW
@@ -649,6 +661,103 @@ if selected_sensors:
             "model_results.csv has not been uploaded "
             "to the data folder yet."
         )
+
+
+    # ==============================================
+    # SECTION 6.7 - DATA QUALITY AND STATISTICS
+    # ==============================================
+
+    # Display the section heading
+    st.header("Data Quality and Statistics")
+
+    # ==============================================
+    # 1. DATASET OVERVIEW
+    # ==============================================
+
+    # Create three columns for summary statistics
+    col1, col2, col3 = st.columns(3)
+
+    # Display the total number of observations
+    with col1:
+        st.metric(
+            "Total Observations",
+            len(combined_df)
+        )
+
+    # Display the number of selected ASE sensors
+    with col2:
+        st.metric(
+            "Selected Sensors",
+            len(selected_sensors)
+        )
+
+    # Display the total number of missing values
+    with col3:
+        st.metric(
+            "Missing Values",
+            int(combined_df.isna().sum().sum())
+        )
+
+    # ==============================================
+    # 2. MISSING VALUE ANALYSIS
+    # ==============================================
+
+    st.subheader("Missing Value Analysis")
+
+    # Count missing values in each dataset column
+    missing_values = combined_df.isna().sum()
+
+    # Calculate the percentage of missing values
+    missing_percent = (
+        combined_df.isna().mean() * 100
+    )
+
+    # Create a summary table
+    missing_df = pd.DataFrame({
+        "Column": combined_df.columns,
+        "Missing Values": missing_values.values,
+        "Missing (%)": missing_percent.values
+    })
+
+    # Display the missing-value summary
+    st.dataframe(
+        missing_df,
+        use_container_width=True,
+        hide_index=True
+    )
+
+    # ==============================================
+    # 3. MISSING VALUE VISUALISATION
+    # ==============================================
+
+    # Create a bar chart showing missing percentages
+    fig_missing = px.bar(
+        missing_df,
+        x="Column",
+        y="Missing (%)",
+        title="Percentage of Missing Values by Column"
+    )
+
+    # Display the interactive chart
+    st.plotly_chart(
+        fig_missing,
+        use_container_width=True
+    )
+
+    # ==============================================
+    # 4. DESCRIPTIVE STATISTICS
+    # ==============================================
+
+    st.subheader("Descriptive Statistics")
+
+    # Calculate summary statistics for numeric columns
+    statistics_df = combined_df.describe()
+
+    # Display the statistics table
+    st.dataframe(
+        statistics_df,
+        use_container_width=True
+    )
 
 
 else:
