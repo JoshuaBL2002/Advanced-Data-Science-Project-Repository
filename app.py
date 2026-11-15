@@ -82,19 +82,24 @@ if selected_sensors:
     )
 
     
+
+# Combine selected datasets
+combined_df = pd.concat(
+    datasets,
+    ignore_index=True
+)
+
 # =====================================
 # Section 6.2 - Monitoring Station Filter
 # =====================================
 
 st.subheader("Monitoring Station Selection")
 
-# Allow users to select a monitoring station
 selected_station = st.selectbox(
     "Select monitoring station:",
     ["Both", "SUD3", "QDP"]
 )
 
-# Select the appropriate reference NO2 column
 if selected_station == "SUD3":
     combined_df["Reference_NO2"] = combined_df["SUD3_NO2"]
 
@@ -102,13 +107,19 @@ elif selected_station == "QDP":
     combined_df["Reference_NO2"] = combined_df["QDP_NO2"]
 
 else:
-    # Keep both reference columns when both stations are selected
     combined_df["Reference_NO2"] = pd.NA
 
-st.write("Selected monitoring station:", selected_station)
+# Display the selected sensor data
+st.subheader("Selected Sensor Data")
 
+st.dataframe(
+    combined_df,
+    use_container_width=True
+)
 
-# Display the reference measurements
+st.write("Total observations:", len(combined_df))
+
+# Display reference measurements
 st.subheader("Reference NO₂ Measurements")
 
 if selected_station == "Both":
