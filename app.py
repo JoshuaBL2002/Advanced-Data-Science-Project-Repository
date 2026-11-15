@@ -68,7 +68,7 @@ if selected_sensors:
     for sensor in selected_sensors:
         file_path = DATA_FOLDER / sensor_files[sensor]
 
-        df = pd.read_csv(file_path)
+        df = pd.read_csv(file_path, sep=";", na_values=["NA"])
 
         # Add a column identifying the sensor
         df["Sensor"] = sensor
