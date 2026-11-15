@@ -138,13 +138,14 @@ sensor_files = {
 # Users can choose one or several ASE sensors
 # The available choices come from the sensor_files dictionary
 # ASE4 and ASE5 are selected automatically when the app opens
+# Allow users to select multiple ASE sensors
+# The dropdown will now appear in the sidebar
 
-selected_sensors = st.multiselect(
+selected_sensors = st.sidebar.multiselect(
     "Select ASE sensors to compare:",
     options=list(sensor_files.keys()),
     default=["ASE4", "ASE5"]
 )
-
 
 # ==============================================
 # 5.4 LOAD THE SELECTED SENSOR DATASETS
@@ -213,8 +214,9 @@ if selected_sensors:
     # Both displays reference measurements from both stations
     # SUD3 selects the SUD3 reference measurements
     # QDP selects the QDP reference measurements
+    # Display monitoring station selection in the sidebar
 
-    selected_station = st.selectbox(
+    selected_station = st.sidebar.selectbox(
         "Select monitoring station:",
         ["Both", "SUD3", "QDP"]
     )
@@ -363,7 +365,7 @@ if selected_sensors:
     max_date = graph_df["date"].max().date()
 
     # Allow users to select a start and end date
-    selected_dates = st.date_input(
+    selected_dates = st.sidebar.date_input(
         "Select the date range:",
         value=(min_date, max_date),
         min_value=min_date,
